@@ -7,3 +7,4 @@ def shannon(vec,**kwargs):
 
 def dshannon(data,xlabel,ylabel,**kwargs):
            data[xlabel].value_counts().index.map(lambda x: shannon(data[ylabel][data[xlabel] == x]),**kwargs)
+

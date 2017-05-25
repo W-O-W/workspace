@@ -124,8 +124,25 @@ def var_coder(data,col,codetype="binary",**kwargs):
             index=data[i].value_counts().index
             num=pd.Series(list(range(len(index))),index=index)
             data[col]=data[col].map(lambda x:num[x])
-
         return data
+    if codetype=="multi2single":
+        ddata=data.copy()
+        ddata.index=list(range(data.shape[0]))
+        ddata.sort(col,inplace=True)
+        def same(x,y):
+            reduce(lambda x,y:x and y,x==y)
+        p=pd.Series(0,index=data.index)
+        k=0
+        p[0]=0
+        for i in range(1,data.shape[0]):
+            if not same(ddata[col].iloc[i,:],ddata[col].iloc[i-1,:]):
+                k+=1
+                p[i]=k
+            else:
+                p[i]=k
+        ddata.Ncode=p
+        ddata.index=data.index
+        return ddata
 '''
 path="/home/ki/Downloads/ccf_offline_stage1_train.csv"
 data=data_loader(path,"CSV")
