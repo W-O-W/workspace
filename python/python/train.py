@@ -332,4 +332,176 @@ data_train.index=data_train.label
 std=[np.std(data_train[i]/data_train[i].max()) for i in data_train.columns]
 print(std)
 
-#xgboost
+import numpy as np
+import scipy.sparse
+import pickle
+import xgboost as xgb
+import pandas as pd
+import numpy as np
+import xgboost as xgb
+from xgboost.sklearn import XGBClassifier
+from sklearn import cross_validation, metrics  # Additional scklearn functions
+from sklearn.grid_search import GridSearchCV  # Perforing grid search
+import matplotlib.pylab as plt
+import scipy as sp
+def logloss(act,pred):
+    epsilon=1e-15
+    pred=sp.maximum(epsilon,pred)
+    pred=sp.minimum(1-epsilon,pred)
+    ll=sum(act*sp.log(pred)+sp.subtract(1,act)*sp.log(sp.subtract(1,pred)))
+    ll=ll*-1.0/len(act)
+    return ll
+
+def modelfit(alg, dtrain,dtest, dlabelx,dlabely, useTrainCV=True, cv_folds=5, early_stopping_rounds=50):
+    if useTrainCV:
+        xgb_param = alg.get_xgb_params()  # 获得参数列表
+        xgtrain = xgb.DMatrix(dtrain.values, label=dlabelx.values)
+        cvresult = xgb.cv(xgb_param,
+                          xgtrain,
+                          num_boost_round=alg.get_params()['n_estimators'],
+                          nfold=cv_folds,
+                          metrics='logloss',
+                          early_stopping_rounds=early_stopping_rounds
+                          )
+        alg.set_params(n_estimators=cvresult.shape[0])
+
+    # Fit the algorithm on the data
+    alg.fit(dtrain, dlabelx, eval_metric='auc')
+
+    # Predict training set:
+    dtest_predictions = alg.predict(dtest)
+    dtest_predprob = alg.predict_proba(dtest)[:, 1]
+
+    dtrain_predictions=alg.predict(dtrain)
+    dtrain_predprob=alg.predict_proba(dtrain)[:,1]
+
+
+    # Print model report:
+    print("\nModel Report")
+    print("Accuracy : %.4g" %metrics.accuracy_score(dlabely, dtest_predictions))
+    print("AUC Score (Test): %f" %metrics.roc_auc_score(dlabely, dtest_predprob))
+
+    print("Accuracy : %.4g" % metrics.accuracy_score(dlabelx, dtrain_predictions))
+    print("AUC Score (Train): %f" % metrics.roc_auc_score(dlabelx, dtrain_predprob))
+
+    print("logloss Score (Train): %f" % logloss(dlabelx, dtrain_predprob))
+    print("logloss Score (Test): %f" % logloss(dlabely, dtest_predprob))
+
+    feat_imp = pd.Series(alg.booster().get_fscore()).sort_values(ascending=False)
+    feat_imp.plot(kind='bar', title='Feature Importances')
+    plt.ylabel('Feature Importance Score')
+
+def train(dtest,dtrain,dlabelx,dlabely,userTrainCV=True,cv_folds=5,early_stopping_rounds=50):
+
+    param = {'max_depth': 10,#每棵树的最大深度
+             'learning_rate': 0.1,#学习率
+             'min_child_weight':5,#叶节点的最小权重和
+             "max_delta_step":2,#最大迭代步长
+             "subsample":0.1,#每次抽样比例
+             "reg_alpha":0.1,#最小分裂
+             "reg_lambda":300,
+             "colsample_bytree":0.8,#?
+             "seed":12,#随机数
+             'silent': 0,#是否静默
+             'objective': 'binary:logistic',#任务模式
+             "n_estimators":1000,
+             "scale_pos_weight":1
+             }
+
+    num_round=12#树规模
+    watchlist=[(dtest, 'eval'), (dtrain, 'train')]#观察值
+    xgb1=XGBClassifier(**param)
+    modelfit(xgb1,dtrain,dtest,dlabelx,dlabely)
+    data_train=xgb.DMatrix(dtrain,label=dlabelx)
+def train2(data,label,train_rate=0.8):
+    x=np.random.binomial(1,train_rate,size=data.shape[0])
+    dtrain=xgb.DMatrix(data[x==1].values,label=label[x==1].values)
+    dtest=xgb.DMatrix(data[x==0],label=label[x==0].values)
+    label=xgb.DMatrix(label.values)
+
+    param={
+        "booster":"gbtree",
+        "objective":"binary:logistic",
+        "early_stopping_rounds":100,
+        "scale_pos_weight":0.3,
+        "eval_metric":"auc",
+        "gamma":"0.1",
+        "lambda":550,
+        "subsample":0.7,
+        "max_depth":8,
+        "colsample_bytree":0.4,
+        "min_child_weight":3,
+        "eta":0.02,
+        "seed":12,
+    }
+    clf=xgb.train(param,dtrain,num_boost_round=40,)
+data_train=data_loader(path+"/data_train.csv","CSV")
+data_test=data_loader(path+"/data_test.csv","CSV")
+one=data_train[data_train.label==1]
+zero=data_train[data_train.label==0]
+w=data_train.label.map(lambda x:30 if x==1 else 1)
+data=pd.concat([zero.sample(int(1.5*one.shape[0])),one])
+
+dlabel=data.label
+data.drop(["label","clickTime","conversionTime","userID","Unnamed: 0.1","Unnamed: 0"],axis=1,inplace=True)
+data_test.drop(["label","clickTime","userID","Unnamed: 0"],axis=1,inplace=True)
+train(data_test,data,dlabel=dlabel)
+
+xxxx=np.random.binomial(1,0.8,size=data1.shape[0])
+
+def cross(data,col1,col2):
+    for i in col1:
+        for j in col2:
+            index1=data[i].value_counts().index
+            index1=pd.Series(list(range(1,index1.shape[0]+1)),index=index1)
+
+            index2 = data[j].value_counts().index
+            index2 = pd.Series(list(range(1, index2.shape[0]+1)), index=index2)
+
+            data[i+j]=data[[i,j]].apply(lambda x:index1[x[i]]*index2[x[j]]+index2[x[j]],axis=1)
+
+appID=data.appID.value_counts().index
+userPool=data.userID.value_counts().index
+
+
+data_train.index=data_train.userID
+data=data_loader(path+"/data.csv","CSV")
+data=data[["label","userID","appID"]]
+data["download"]=pd.DataFrame(0,index=data.index)
+data_UI=data_loader(path+"/data_UI.csv","csv")
+data_UI.index=data_UI.appID
+data_UI[data_UI.appID.map(lambda x:x in appPool)]
+
+recentUserApp=pd.concat([data_train,data_UAA])
+
+for i in range(2642):
+    if data_UI.iloc[i].userID in userPool:
+        d = data.loc[data_UI.iloc[i].userID]
+        if type(d) == pd.DataFrame:
+            print(d)
+            d = d[d.appID == data_UI.iloc[i].appID]
+            d["download"] += 1
+        elif d["appID"] == data_UI.iloc[i].appID:
+            d["download"] += 1
+
+for i in range(recentUserApp.shape[0]):
+    x = recentUserApp.iloc[i]
+    if x["userID"] in userPool:
+        d = data.loc[x["userID"]]
+        if type(d) == pd.DataFrame:
+            d = d[d["time"] > x["time"]]
+            appID = x["appID"]
+            if type(d) == pd.DataFrame:
+                d=d[d["appID"]==appID]
+                d["recentDownload"] += 1
+                d["download"] += 1
+                d["click"] += 1
+            elif d["appID"]==appID:
+                d["recentDownload"] += 1
+                d["download"] += 1
+                d["click"] += 1
+        elif d["time"] > x["time"] and d["appID"]==appID:
+            d["recentDownload"] += 1
+            d["download"] += 1
+            d["click"] += 1
+#click 未包含 download-recentDownload

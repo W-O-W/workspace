@@ -123,7 +123,7 @@ def var_coder(data,col,codetype="binary",**kwargs):
         for i in col:
             index=data[i].value_counts().index
             num=pd.Series(list(range(len(index))),index=index)
-            data[col]=data[col].map(lambda x:num[x])
+            data[i]=data[i].map(lambda x:num[x])
         return data
     if codetype=="multi2single":
         ddata=data.copy()
@@ -196,3 +196,13 @@ def var_discreter(data=None,col=None,array=None,method="cut",**kwargs):
             return cutByRandomTree(data,col,kwargs.get("y"))
 
 
+def cross(data,col1,col2):
+    for i in col1:
+        for j in col2:
+            index1=data[i].value_counts().index
+            index1=pd.DataFrame(list(range(1,index1.shape[0]+1)),index=index1)
+
+            index2 = data[j].value_counts().index
+            index2 = pd.DataFrame(list(range(1, index2.shape[0]+1)), index=index2)
+
+            data[i+j]=data[[i,j]].apply(lambda x:index1[x[i]]*index2[x[j]]+index2[x[j]],axis=1)
